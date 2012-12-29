@@ -55,9 +55,6 @@ class population {
         gsl_rng * rng;
         int seed;
         int get_random_seed();
-        //Functions
-        pair<int,int> selectParents(); //Randomly selects two parents from Ancestral Generation
-        genome progeny(pair<int,int>); //From a given set of parents, calculates a recombinative offspring.
         void writeBlockHist();
         double avgFit;
         map< pair<int,int>, double > fitnessL; //Static Fitness Landscape
@@ -66,6 +63,10 @@ class population {
         int loci;
         gsl_histogram* blockHist;
         FILE *stream;
+        //Functions
+        pair<int,int> selectParents(); //Randomly selects two parents from Ancestral Generation
+        genome progeny(pair<int,int>); //From a given set of parents, calculates a recombinative offspring.
+        int binarySearch_int(vector<double> &data, int min, int max, double key);
     public:
         std::vector< genome > pop; 
         //Overloaded Constructors

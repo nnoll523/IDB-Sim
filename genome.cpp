@@ -393,6 +393,24 @@ pair<int,int> population::selectParents(){ //Parents are selected at random from
         //Need an algorithm that weights individuals based upon their fitness.
     }
 }
+
+int population::binarySearch_int(vector<double> &data, int min, int max, double key) { //Data is assumed to be sorted in ascending order!
+    try {
+        if (min > max) {throw "Encountered invalid search range";} //Something terrible has happened.
+        int midpoint = min + ((max-min)/2); //Obtain the midpoint using integer arithmetic.
+        if (midpoint > 0) {
+            if (key > data[midpoint]) {binarySearch_int(data, midpoint+1, max, key);} //If the key is larger than the current bucket value, then the address must be to the right of our current position. 
+            else if (key <= data[midpoint-1]) {binarySearch_int(data, min, midpoint-1, key);} //If the key is smaller than the bucket to our immediate left, then we know the address must be to the left of our current position.
+            else {return midpoint;} //If other two cases fail, then the key must be located in our current bucket. 
+        }
+        else {return 0;} //If the midpoint is zero, search should terminate. 
+    }
+    catch (const char* Message) {
+        cout << "Error:" << Message << "\n";
+    }
+
+}
+
 int population::get_random_seed() {
 	int seedtmp;
 	ifstream urandom("/dev/urandom", ios::binary);
@@ -471,11 +489,13 @@ int main() {
         test[i] = temp;
     }
     population pop(10,10,test);
+    /*
     pop.evolve(2);
     for (int i=0; i<10; i++) {
         cout << pop.pop[i] << " " << pop.pop[i].getFitness() << "\n";
     }
     cout << pop.getAverageFit() << "\n";
+    */
     //dump_map(pop.fitnessL);
     //cout << "\n";
     return 0;
