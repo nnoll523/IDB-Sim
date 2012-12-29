@@ -10,7 +10,7 @@
 
 #define VERBOSE 0
 #define RNG gsl_rng_taus2
-#define WRITE 1
+#define WRITE 0
 
 using namespace std;
 
@@ -32,16 +32,19 @@ class genome {
         int seed;
         int get_random_seed();
         double fitness; //Genome Fitness
-    public:
         int size;
+    public:
+        friend class population;
         std::vector< block > g; //genome vector of isoancestral blocks
         //Constructors & Destructors
         genome();
         genome(int c_in, int L_in);
+        genome(int c_in, int L_in, double fit_in);
         genome(vector< block > g_in);
         ~genome();
         vector < block > crossBlocks(block b1, block b2, int loc1, int loc2, int crossPoint);
         bool containsLocus(int ancestor, int locus);
+        double getFitness();
         //Operator Overload
         genome operator+(genome g2);
         friend ostream& operator<< (ostream &out,const genome &g);
@@ -56,13 +59,15 @@ class population {
         pair<int,int> selectParents(); //Randomly selects two parents from Ancestral Generation
         genome progeny(pair<int,int>); //From a given set of parents, calculates a recombinative offspring.
         void writeBlockHist();
-    public:
+        double avgFit;
+        map< pair<int,int>, double > fitnessL; //Static Fitness Landscape
+        map< pair<int,int>, double>::iterator it; //Pointer to each hash entry.
         int size; //Size N
         int loci;
-        std::vector< genome > pop; 
         gsl_histogram* blockHist;
         FILE *stream;
-        map< pair<int,int>, double > fitnessL; //Static Fitness Landscape
+    public:
+        std::vector< genome > pop; 
         //Overloaded Constructors
         population();
         population(int N);
@@ -73,6 +78,7 @@ class population {
         //Functions
         void evolve();
         void evolve(int gen); //Time evolves a population
+        double getAverageFit();
         std::vector<int> getWeight(int ancestor); //Calculates the weight function for all loci for ancestral individual 'ancestor'.
         std::vector< vector<int> > getAllWeights(); //Calculates the weight function for all loci for all ancestors.
         void updateBlockSizes(); //Get Histogram of Block sizes

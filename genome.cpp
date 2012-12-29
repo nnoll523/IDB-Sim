@@ -37,6 +37,15 @@ genome::genome(int c_in, int L_in) {
     gsl_rng_set(rng,seed);
 }
 
+genome::genome(int c_in, int L_in, double fit_in) {
+    size = L_in;
+    fitness = fit_in;
+    g.push_back(block(L_in, c_in));  //entire array of homogeneous genes
+    seed = get_random_seed();
+    rng = gsl_rng_alloc(RNG);
+    gsl_rng_set(rng,seed);
+}
+
 genome::genome(vector < block > g_in) {
     g = g_in;
     size = 0;
@@ -82,6 +91,8 @@ bool genome::containsLocus(int ancestor, int locus) {
         cout << "Error:" << Message << "\n";
     }    
 }
+
+double genome::getFitness() {return fitness;}
 
 genome genome::operator+(genome g2){
     try {
@@ -205,6 +216,7 @@ vector< block > genome::crossBlocks(block b1, block b2, int loc1, int loc2, int 
 population::population() {
     size = 1;
     loci = 10;
+    avgFit = 0;
     stream = fopen("out.txt","w");
     pop.push_back(genome(1,10));
     seed = get_random_seed();
@@ -216,6 +228,7 @@ population::population() {
 population::population(int N) {
     size = N;
     loci = 10;
+    avgFit = 0;
     stream = fopen("out.txt","w");
     for(int i=0; i<size;i++) {
         pop.push_back(genome(i,10));
@@ -229,6 +242,7 @@ population::population(int N) {
 population::population(int N, int L) { //Neutral Evolution!
     size = N;
     loci = L;
+    avgFit = 0;
     stream = fopen("out.txt","w");
     for(int i=0;i<size;i++) {
         pop.push_back(genome(i,L));
@@ -242,22 +256,27 @@ population::population(int N, int L) { //Neutral Evolution!
 population::population(int N, int L, vector< vector<double> > fit) {
     size = N;
     loci = L;
+    avgFit = 0;
     stream = fopen("out.txt","w");
     try {
         if (fit.size() != N || fit[0].size() != loci) {
             throw "Incorrect Fitness Landscape dimensions!";
         }
+        vector< double > initFit (size); //Create a temp vector that will be discarded after class has been constructed that holds fitness.
         //Read in fitness landscape. Right now stored in a hash table - only beneficial for a sparse landscape.
         for (int i=0; i<fit.size(); i++){
             for (int j=0; j<fit[i].size(); j++) {
                 if (fit[i][j] != 0) {
+                    avgFit += fit[i][j];
+                    initFit[i] += fit[i][j];
                     fitnessL.insert(pair< pair< int,int >,double >(pair<int,int>(i,j),fit[i][j])); //Create a map entry if non-zero.
                 }
             }
         }
-        //Initialize Population
+        avgFit/= size; //Total fitness divided by the number of individuals gives average fitness.
+        //Initialize Population with corresponding fitness values.
         for(int i=0;i<size;i++) {
-            pop.push_back(genome(i,L));
+            pop.push_back(genome(i,L, initFit[i]));
         }
         seed = get_random_seed();
         rng = gsl_rng_alloc(RNG);
@@ -330,28 +349,48 @@ vector< vector<int> > population::getAllWeights(){
 }
 
 void population::evolve(int gen) { //Wright-Fisher Model - Population size is held constant. Parental genotypes are chosen randomly. 
-    for (int j =0; j<gen; j++){
+    for (int j=0; j<gen; j++){
+        vector <genome> newPop(size);
+        avgFit = 0;
         for(int i=0; i<size; i++) {
-            pop[i] = progeny(selectParents());
+            newPop[i] = progeny(selectParents());
+            for (map<pair<int,int>,double>::const_iterator it = fitnessL.begin(); it != fitnessL.end(); it++) {
+                if (newPop[i].containsLocus(it->first.first, it->first.second)) {
+                    newPop[i].fitness += it->second;
+                    avgFit += it->second;
+                }
+            }
         }
+        pop = newPop;
+        avgFit/=size;
     }
     updateBlockSizes();
     if (WRITE) {writeBlockHist();}
 }
+
 void population::evolve() { //Wright-Fisher Model - Population size is held constant. Parental genotypes are chosen randomly. 
    evolve(1); 
-   if (WRITE) {writeBlockHist();}
 }
-pair<int,int> population::selectParents(){ //Parents are selected at random from population - Neutral evolution.
+
+double population::getAverageFit() {
+    return avgFit;
+}
+
+pair<int,int> population::selectParents(){ //Parents are selected at random from population 
     pair<int,int> ancestors;
-    ancestors.first = (int)gsl_rng_uniform_int(rng,size);
-    ancestors.second = (int)gsl_rng_uniform_int(rng,size);
-    //Recursive definition to ensure unique parents.
-    if (ancestors.second == ancestors.first) {
-        return selectParents();
+    if (fitnessL.empty()) { //Neutral Evolution
+        ancestors.first = (int)gsl_rng_uniform_int(rng,size);
+        ancestors.second = (int)gsl_rng_uniform_int(rng,size);
+        //Recursive definition to ensure unique parents.
+        if (ancestors.second == ancestors.first) {
+            return selectParents();
+        }
+        else {
+            return ancestors;
+        }
     }
     else {
-        return ancestors;
+        //Need an algorithm that weights individuals based upon their fitness.
     }
 }
 int population::get_random_seed() {
@@ -373,6 +412,7 @@ void dump_map(const std::map<pair<int,int>, double>& map) {
     }
 }
 int main() {
+    /*
     genome g0(0,10);
     genome g1(1,10);
     cout << g0;
@@ -383,7 +423,7 @@ int main() {
     cout << g2;
     cout << g2.containsLocus(0,6) << "\n";
     cout << g2.containsLocus(0,3) << "\n";
-    /*
+    
     genome g2 = g0 + g1;
     genome g3 = g2 + g0;
     genome g4 = g2 + g1;
@@ -430,7 +470,12 @@ int main() {
         }
         test[i] = temp;
     }
-    population pop(10,10, test);
+    population pop(10,10,test);
+    pop.evolve(2);
+    for (int i=0; i<10; i++) {
+        cout << pop.pop[i] << " " << pop.pop[i].getFitness() << "\n";
+    }
+    cout << pop.getAverageFit() << "\n";
     //dump_map(pop.fitnessL);
     //cout << "\n";
     return 0;
