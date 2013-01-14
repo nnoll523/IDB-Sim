@@ -3,6 +3,7 @@
 #include <utility>
 #include <gsl/gsl_rng.h>
 #include <math.h>
+#include <stdio.h>
 #include <iomanip>
 #include <fstream>
 #include <gsl/gsl_histogram.h>
@@ -10,7 +11,7 @@
 
 #define VERBOSE 0
 #define RNG gsl_rng_taus2
-#define WRITE 0
+#define WRITE 1
 
 using namespace std;
 
@@ -57,8 +58,8 @@ class population {
         int get_random_seed();
         void writeBlockHist();
         double avgFit;
+        vector <double> selective_weight;
         map< pair<int,int>, double > fitnessL; //Static Fitness Landscape
-        map< pair<int,int>, double>::iterator it; //Pointer to each hash entry.
         int size; //Size N
         int loci;
         gsl_histogram* blockHist;
@@ -83,5 +84,6 @@ class population {
         std::vector<int> getWeight(int ancestor); //Calculates the weight function for all loci for ancestral individual 'ancestor'.
         std::vector< vector<int> > getAllWeights(); //Calculates the weight function for all loci for all ancestors.
         void updateBlockSizes(); //Get Histogram of Block sizes
+        double getVariance();
 };
 

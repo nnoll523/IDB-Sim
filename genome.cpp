@@ -257,6 +257,7 @@ population::population(int N, int L, vector< vector<double> > fit) {
     size = N;
     loci = L;
     avgFit = 0;
+    selective_weight = vector<double>(N);
     stream = fopen("out.txt","w");
     try {
         if (fit.size() != N || fit[0].size() != loci) {
@@ -275,8 +276,11 @@ population::population(int N, int L, vector< vector<double> > fit) {
         }
         avgFit/= size; //Total fitness divided by the number of individuals gives average fitness.
         //Initialize Population with corresponding fitness values.
+        double sum_weight = 0; //Temp variable to hold summed value.
         for(int i=0;i<size;i++) {
             pop.push_back(genome(i,L, initFit[i]));
+            sum_weight += exp(initFit[i]-avgFit); //Increment our temp variable by the weight of the ith ind.
+            selective_weight[i] = sum_weight; // The ith bin should include the sum from 0 to i.
         }
         seed = get_random_seed();
         rng = gsl_rng_alloc(RNG);
@@ -354,15 +358,24 @@ void population::evolve(int gen) { //Wright-Fisher Model - Population size is he
         avgFit = 0;
         for(int i=0; i<size; i++) {
             newPop[i] = progeny(selectParents());
-            for (map<pair<int,int>,double>::const_iterator it = fitnessL.begin(); it != fitnessL.end(); it++) {
-                if (newPop[i].containsLocus(it->first.first, it->first.second)) {
-                    newPop[i].fitness += it->second;
-                    avgFit += it->second;
+            if (!fitnessL.empty()){
+                for (map<pair<int,int>,double>::const_iterator it = fitnessL.begin(); it != fitnessL.end(); it++) {
+                    if (newPop[i].containsLocus(it->first.first, it->first.second)) {
+                        newPop[i].fitness += it->second;
+                        avgFit += it->second;
+                    }
                 }
             }
         }
         pop = newPop;
-        avgFit/=size;
+        if (!fitnessL.empty()) {
+            avgFit/=size;
+            double sum = 0;
+            for (int i=0; i<size; i++) { //Update selective weights!
+                sum += exp(newPop[i].fitness - avgFit);
+                selective_weight[i] = sum;
+            }
+        }
     }
     updateBlockSizes();
     if (WRITE) {writeBlockHist();}
@@ -376,21 +389,31 @@ double population::getAverageFit() {
     return avgFit;
 }
 
+double population::getVariance() {
+    double var = 0;
+    for (int i=0; i<size; i++) {
+        var += pow(pop[i].getFitness() - avgFit,2);
+    }
+    var /= (size-1);
+    return var;
+}
+
 pair<int,int> population::selectParents(){ //Parents are selected at random from population 
     pair<int,int> ancestors;
     if (fitnessL.empty()) { //Neutral Evolution
         ancestors.first = (int)gsl_rng_uniform_int(rng,size);
         ancestors.second = (int)gsl_rng_uniform_int(rng,size);
-        //Recursive definition to ensure unique parents.
-        if (ancestors.second == ancestors.first) {
-            return selectParents();
-        }
-        else {
-            return ancestors;
-        }
+    }
+    else { //Selection!
+        ancestors.first = binarySearch_int(selective_weight, 0, size-1, selective_weight[size-1]*gsl_rng_uniform(rng));
+        ancestors.second = binarySearch_int(selective_weight, 0, size-1, selective_weight[size-1]*gsl_rng_uniform(rng));
+    }
+    //Recursive definition to ensure unique parents.
+    if (ancestors.second == ancestors.first) {
+        return selectParents();
     }
     else {
-        //Need an algorithm that weights individuals based upon their fitness.
+        return ancestors;
     }
 }
 
@@ -423,6 +446,7 @@ int population::get_random_seed() {
 	}
 	return seedtmp;
 }
+
 void dump_map(const std::map<pair<int,int>, double>& map) {
     for (std::map<pair<int,int>,double>::const_iterator it = map.begin(); it != map.end(); it++) {
         //cout << "Key: " << it->first << endl;
@@ -480,24 +504,26 @@ int main() {
         pop.evolve(5);
     }
     */
-    vector< vector<double> > test (10);
-    for (int i=0; i<10; i++) {
-        vector<double> temp (10);
-        for (int j=0; j<10; j++) {
-            temp[j] = i;
+    /*vector< vector<double> > test (1000);
+    for (int i=0; i<1000; i++) {
+        vector<double> temp (1000);
+        for (int j=0; j<1000; j++) {
+            temp[j] = i * .000001;
         }
         test[i] = temp;
     }
-    population pop(10,10,test);
+    */
+    population pop(1000,1000);
+    pop.evolve(1000);
     /*
-    pop.evolve(2);
-    for (int i=0; i<10; i++) {
-        cout << pop.pop[i] << " " << pop.pop[i].getFitness() << "\n";
+    for (int t=0; t<10; t++) {
+        cout << pop.getAverageFit() << "\n";
+        cout << pop.getVariance() << "\n";
+        pop.evolve();
     }
     cout << pop.getAverageFit() << "\n";
+    cout << pop.getVariance() << "\n";
     */
-    //dump_map(pop.fitnessL);
-    //cout << "\n";
     return 0;
 }
 
